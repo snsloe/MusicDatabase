@@ -108,14 +108,13 @@ public class MusicDatabaseManager {
     public void exportToExcel(String filePath) throws IOException {
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Music Database");
-            // Header Row
+
             Row headerRow = sheet.createRow(0);
             String[] headers = {"ID", "Title", "Artist", "Album", "Genre", "Duration"};
             for (int i = 0; i < headers.length; i++) {
                 headerRow.createCell(i).setCellValue(headers[i]);
             }
 
-            // Data Rows
             List<MusicRecord> records = new ArrayList<>(recordById.values());
             for (int i = 0; i < records.size(); i++) {
                 MusicRecord record = records.get(i);
