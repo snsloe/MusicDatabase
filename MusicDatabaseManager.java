@@ -32,7 +32,9 @@ public class MusicDatabaseManager {
         }
         try (FileReader reader = new FileReader(databaseFile)) {
             List<MusicRecord> records = new Gson().fromJson(reader, new TypeToken<List<MusicRecord>>() {}.getType());
-            if (records == null) records = new ArrayList<>();
+            if (records == null) {
+                records = new ArrayList<>();
+            }
             rebuildIndexes(records);
             return records;
         }
@@ -51,26 +53,35 @@ public class MusicDatabaseManager {
         }
         recordById.put(record.getId(), record);
         indexRecord(record);
-        saveDatabase(new ArrayList<>(recordById.values()));
+        ArrayList<MusicRecord> newBase = new ArrayList<>(recordById.values());
+        saveDatabase(newBase);
     }
 
     public void deleteRecordByKey(int id) throws IOException {
         MusicRecord record = recordById.remove(id);
         if (record != null) {
             deindexRecord(record);
-            saveDatabase(new ArrayList<>(recordById.values()));
+            ArrayList<MusicRecord> newBase = new ArrayList<>(recordById.values());
+            saveDatabase(newBase);
         }
     }
 
     public void deleteRecordByField(String fieldName, String value) throws IOException {
         TreeMap<String, List<MusicRecord>> fieldIndex = indexedFields.get(fieldName);
         if (fieldIndex != null) {
-            List<MusicRecord> recordsToDelete = fieldIndex.getOrDefault(value, new ArrayList<>());
-            for (MusicRecord record : recordsToDelete) {
-                recordById.remove(record.getId());
-                deindexRecord(record);
+            List<MusicRecord> recordsToDelete = new ArrayList<>(fieldIndex.getOrDefault(value, new ArrayList<>()));
+            if (!recordsToDelete.isEmpty()) {
+                for (MusicRecord record : recordsToDelete) {
+                    recordById.remove(record.getId());
+                    deindexRecord(record);
+                }
+                ArrayList<MusicRecord> newBase = new ArrayList<>(recordById.values());
+                saveDatabase(newBase);
+            } else {
+                throw new IllegalArgumentException("No records found for deletion!");
             }
-            saveDatabase(new ArrayList<>(recordById.values()));
+        } else {
+            throw new IllegalArgumentException("Field name not indexed!");
         }
     }
 
@@ -97,42 +108,6 @@ public class MusicDatabaseManager {
         saveDatabase(new ArrayList<>());
     }
 
-    public void deleteDatabase() throws IOException {
-        if (databaseFile.exists()) {
-            Files.delete(databaseFile.toPath());
-        }
-        recordById.clear();
-        indexedFields.clear();
-    }
-
-    public void exportToExcel(String filePath) throws IOException {
-        try (Workbook workbook = new XSSFWorkbook()) {
-            Sheet sheet = workbook.createSheet("Music Database");
-
-            Row headerRow = sheet.createRow(0);
-            String[] headers = {"ID", "Title", "Artist", "Album", "Genre", "Duration"};
-            for (int i = 0; i < headers.length; i++) {
-                headerRow.createCell(i).setCellValue(headers[i]);
-            }
-
-            List<MusicRecord> records = new ArrayList<>(recordById.values());
-            for (int i = 0; i < records.size(); i++) {
-                MusicRecord record = records.get(i);
-                Row row = sheet.createRow(i + 1);
-                row.createCell(0).setCellValue(record.getId());
-                row.createCell(1).setCellValue(record.getTitle());
-                row.createCell(2).setCellValue(record.getArtist());
-                row.createCell(3).setCellValue(record.getAlbum());
-                row.createCell(4).setCellValue(record.getGenre());
-                row.createCell(5).setCellValue(record.getDuration());
-            }
-
-            try (FileOutputStream fileOut = new FileOutputStream(filePath)) {
-                workbook.write(fileOut);
-            }
-        }
-    }
-
     private void rebuildIndexes() throws IOException {
         rebuildIndexes(openDatabase());
     }
@@ -147,6 +122,8 @@ public class MusicDatabaseManager {
     }
 
     private void indexRecord(MusicRecord record) {
+        indexField("id", String.valueOf(record.getId()), record);
+        indexField("duration", String.valueOf(record.getDuration()), record);
         indexField("title", record.getTitle(), record);
         indexField("artist", record.getArtist(), record);
         indexField("album", record.getAlbum(), record);
@@ -154,6 +131,8 @@ public class MusicDatabaseManager {
     }
 
     private void deindexRecord(MusicRecord record) {
+        deindexField("id", String.valueOf(record.getId()), record);
+        deindexField("duration", String.valueOf(record.getDuration()), record);
         deindexField("title", record.getTitle(), record);
         deindexField("artist", record.getArtist(), record);
         deindexField("album", record.getAlbum(), record);
